@@ -34,7 +34,15 @@ public static class CustomAttributeEx
     private static string? Extract(this IHasCustomAttribute originalMethod, string attributeName,
         string parameterName)
     {
-        var attribute = originalMethod.CustomAttributes.SingleOrDefault(it => it.Constructor?.DeclaringType?.Name == attributeName);
+        // NOTE: the cast to IMemberDescriptor is load-bearing. This assembly is compiled against
+        // AsmResolver beta.2 but is packaged alongside Cpp2IL which pins AsmResolver rc.1, so at
+        // runtime NuGet unifies to rc.1's physical AsmResolver.DotNet.dll. A bare
+        // `it.Constructor?.DeclaringType` binds (in beta.2 IL) to IMethodDefOrRef.get_DeclaringType,
+        // which rc.1 removed -> MissingMethodException -> generation swallows it and every value-type
+        // field offset becomes 0 -> corrupt Vector3/Quaternion/Color on EVERY game. IMemberDescriptor
+        // declares DeclaringType in BOTH beta.2 and rc.1, so the cast produces a token that resolves
+        // either way.
+        var attribute = originalMethod.CustomAttributes.SingleOrDefault(it => ((IMemberDescriptor?)it.Constructor)?.DeclaringType?.Name == attributeName);
         var field = attribute?.Signature?.NamedArguments.SingleOrDefault(it => it.MemberName == parameterName);
 
         return field?.Argument.GetElementAsString();
